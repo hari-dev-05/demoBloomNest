@@ -8,16 +8,30 @@ dotenv.config();
 
 const app = express();
 
-// Middleware
-const allowedOrigin = process.env.FRONTEND_URL || 'http://localhost:5173';
-app.use(
-  cors({
-    origin: [allowedOrigin, 'http://localhost:5173', 'http://127.0.0.1:5173'],
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-  })
-);
+// Parse FRONTEND_URL environment variable (supports single or comma-separated origins)
+const allowedOrigins = process.env.FRONTEND_URL
+  ? process.env.FRONTEND_URL.split(',').map((url) => url.trim())
+  : [];
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests with no origin (e.g., mobile apps, curl, or server health checks)
+    // or if allowedOrigins includes the incoming origin
+    if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+};
+
+// Registered before API routes
+app.use(cors(corsOptions));
+// Handle preflight OPTIONS requests
+app.options('*', cors(corsOptions));
 
 app.use(express.json());
 
@@ -49,20 +63,24 @@ app.use((err, req, res, next) => {
 
 // Database connection & Server start
 const PORT = process.env.PORT || 5000;
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/bloomnest';
+const MONGO_URI = process.env.MONGO_URI;
+
+if (!MONGO_URI) {
+  console.error('CRITICAL: MONGO_URI environment variable is missing.');
+}
 
 mongoose
   .connect(MONGO_URI)
   .then(() => {
-    console.log(' Successfully connected to MongoDB database');
+    console.log('Successfully connected to MongoDB database');
     app.listen(PORT, () => {
-      console.log(` BloomNest Server running on http://localhost:${PORT}`);
+      console.log(`BloomNest Server running on port ${PORT}`);
     });
   })
   .catch((err) => {
-    console.error(' MongoDB Connection Error:', err.message);
-    console.log(' Starting express server without database connection for fallback...');
+    console.error('MongoDB Connection Error:', err.message);
     app.listen(PORT, () => {
-      console.log(` BloomNest Server running on http://localhost:${PORT} (MongoDB offline)`);
+      console.log(`BloomNest Server running on port ${PORT} (MongoDB connection failed)`);
     });
   });
+

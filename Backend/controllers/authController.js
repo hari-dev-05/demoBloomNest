@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 
 // Helper to generate JWT
 const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET || 'bloomnest_secret_key', {
+  return jwt.sign({ id }, process.env.JWT_SECRET, {
     expiresIn: '7d',
   });
 };
